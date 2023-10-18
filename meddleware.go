@@ -92,3 +92,10 @@ func Create(registry prometheus.Registerer, next http.RoundTripper, namespace, s
 		),
 	)
 }
+
+func normalizeString(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "-", "_")
+	return s
+}
+
