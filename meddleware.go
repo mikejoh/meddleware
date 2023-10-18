@@ -1,5 +1,13 @@
 package meddleware
 
+import (
+	"net/http"
+	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
 // CreateMiddleware creates the HTTP client metrics middleware, adds them to a Prometheus metric registry and returns a RoundTripper to be used by a HTTP client.
 func Create(registry prometheus.Registerer, next http.RoundTripper, namespace, subsystem string) promhttp.RoundTripperFunc {
 	if registry == nil {
@@ -98,4 +106,3 @@ func normalizeString(s string) string {
 	s = strings.ReplaceAll(s, "-", "_")
 	return s
 }
-
