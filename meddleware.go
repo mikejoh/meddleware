@@ -30,8 +30,10 @@ func Create(registry prometheus.Registerer, next http.RoundTripper, namespace, s
 
 	clientAPIRequestsCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "client_api_requests_total",
-			Help: "A counter for requests from the wrapped client.",
+			Namespace: ns,
+			Subsystem: ss,
+			Name:      "client_api_requests_total",
+			Help:      "A counter for requests from the wrapped client.",
 		},
 		[]string{"code", "method"},
 	)
