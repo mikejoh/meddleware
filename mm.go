@@ -8,13 +8,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+type RegistrerGatherer interface {
+	prometheus.Registerer
+	prometheus.Gatherer
+}
+
 type MM struct {
 	Namespace string
 	Subsystem string
-	Registry  *prometheus.Registry
+	Registry  RegistrerGatherer
 }
 
-func New(metricsRegistry *prometheus.Registry, namespace, subsystem string) *MM {
+func New(metricsRegistry RegistrerGatherer, namespace, subsystem string) *MM {
 	if metricsRegistry == nil {
 		metricsRegistry = prometheus.NewRegistry()
 	}
