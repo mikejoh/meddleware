@@ -8,7 +8,7 @@
 
 ## Usage
 
-
+This example will output the client metrics at `http://Localhost:8080` we get from the chained metric middlewares:
 ```
 func main() {
     pr := prometheus.NewRegistry()
