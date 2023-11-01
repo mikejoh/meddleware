@@ -1,4 +1,4 @@
-package mm
+package main
 
 import (
 	"net/http"
@@ -8,40 +8,58 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// CreateMiddleware creates the HTTP client metrics middleware, adds them to a Prometheus metric registry and returns a RoundTripper to be used by a HTTP client.
-func Create(registry prometheus.Registerer, next http.RoundTripper, namespace, subsystem string) promhttp.RoundTripperFunc {
-	if registry == nil {
-		registry = prometheus.NewRegistry()
+type MM struct {
+	Namespace string
+	Subsystem string
+	Registry  *prometheus.Registry
+}
+
+func New(metricsRegistry *prometheus.Registry, namespace, subsystem string) *MM {
+	if metricsRegistry == nil {
+		metricsRegistry = prometheus.NewRegistry()
 	}
 
-	if next == nil {
-		next = http.DefaultTransport
+	return &MM{
+		Namespace: normalizeString(namespace),
+		Subsystem: normalizeString(subsystem),
+		Registry:  metricsRegistry,
 	}
+}
 
-	ns := normalizeString(namespace)
-	ss := normalizeString(subsystem)
-
-	clientInFlightGauge := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: ns,
-		Subsystem: ss,
+func (mm *MM) WithClientRequestsInFlight(next http.RoundTripper) http.RoundTripper {
+	metric := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: mm.Namespace,
+		Subsystem: mm.Subsystem,
 		Name:      "http_client_in_flight_requests",
 		Help:      "Total count of in-flight requests for the wrapped http client.",
 	})
 
-	clientAPIRequestsCounter := prometheus.NewCounterVec(
+	mm.Registry.MustRegister(metric)
+
+	return promhttp.InstrumentRoundTripperInFlight(metric, next)
+}
+
+func (mm *MM) WithClientRequestsCounter(next http.RoundTripper) http.RoundTripper {
+	metric := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: ns,
-			Subsystem: ss,
-			Name:      "client_api_requests_total",
+			Namespace: mm.Namespace,
+			Subsystem: mm.Subsystem,
+			Name:      "http_client_api_requests_total",
 			Help:      "A counter for requests from the wrapped client.",
 		},
 		[]string{"code", "method"},
 	)
 
+	mm.Registry.MustRegister(metric)
+
+	return promhttp.InstrumentRoundTripperCounter(metric, next)
+}
+
+func (mm *MM) WithClientTrace(next http.RoundTripper) http.RoundTripper {
 	clientDNSLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace: ns,
-			Subsystem: ss,
+			Namespace: mm.Namespace,
+			Subsystem: mm.Subsystem,
 			Name:      "http_client_dns_duration_seconds",
 			Help:      "Trace dns latency histogram.",
 			Buckets:   []float64{.005, .01, .025, .05},
@@ -51,24 +69,13 @@ func Create(registry prometheus.Registerer, next http.RoundTripper, namespace, s
 
 	clientTLSLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace: ns,
-			Subsystem: ss,
+			Namespace: mm.Namespace,
+			Subsystem: mm.Subsystem,
 			Name:      "http_client_tls_duration_seconds",
 			Help:      "Trace tls latency histogram.",
 			Buckets:   []float64{.05, .1, .25, .5},
 		},
 		[]string{"event"},
-	)
-
-	clientHistVec := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: ns,
-			Subsystem: ss,
-			Name:      "http_client_request_duration_seconds",
-			Help:      "Trace http request latencies histogram.",
-			Buckets:   prometheus.DefBuckets,
-		},
-		[]string{},
 	)
 
 	clientTrace := &promhttp.InstrumentTrace{
@@ -86,21 +93,46 @@ func Create(registry prometheus.Registerer, next http.RoundTripper, namespace, s
 		},
 	}
 
-	registry.MustRegister(
-		clientInFlightGauge,
-		clientAPIRequestsCounter,
-		clientDNSLatencyVec,
-		clientTLSLatencyVec,
-		clientHistVec,
+	mm.Registry.MustRegister(clientDNSLatencyVec, clientTLSLatencyVec)
+
+	return promhttp.InstrumentRoundTripperTrace(clientTrace, next)
+}
+
+func (mm *MM) WithClientDuration(next http.RoundTripper) http.RoundTripper {
+	metric := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: mm.Namespace,
+			Subsystem: mm.Subsystem,
+			Name:      "http_client_request_duration_seconds",
+			Help:      "Trace http request latencies histogram.",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{},
 	)
 
-	return promhttp.InstrumentRoundTripperInFlight(clientInFlightGauge,
-		promhttp.InstrumentRoundTripperCounter(clientAPIRequestsCounter,
-			promhttp.InstrumentRoundTripperTrace(clientTrace,
-				promhttp.InstrumentRoundTripperDuration(clientHistVec, next),
-			),
-		),
+	mm.Registry.MustRegister(metric)
+
+	return promhttp.InstrumentRoundTripperDuration(metric, next)
+}
+
+func Build(base http.RoundTripper, middlewares ...func(http.RoundTripper) http.RoundTripper) http.RoundTripper {
+	chain := base
+	for _, middleware := range middlewares {
+		chain = middleware(chain)
+	}
+
+	return chain
+}
+
+func (mm *MM) DefaultMiddlewares(baseTransport http.RoundTripper) http.RoundTripper {
+	finalMiddleware := Build(
+		baseTransport,
+		mm.WithClientRequestsInFlight,
+		mm.WithClientRequestsCounter,
+		mm.WithClientTrace,
+		mm.WithClientDuration,
 	)
+	return finalMiddleware
 }
 
 func normalizeString(s string) string {
