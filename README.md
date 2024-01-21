@@ -1,5 +1,10 @@
 # mm
 
+<p align="center">
+<img src="https://github.com/mikejoh/mm/assets/899665/0158ee4b-e5b1-4f70-ae04-82a01217de34" alt="mm" />
+</p>
+
+
 `mm` - Metrics middleware for your Go HTTP Clients!
 
 ## Install
