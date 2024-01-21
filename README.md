@@ -8,12 +8,12 @@
 
 ## Usage
 
-This example will output the client metrics at `http://Localhost:8080` we get from the chained metric middlewares:
+This example will output the client metrics at `http://localhost:8080` we get from the chained metric middlewares:
 ```
 func main() {
     pr := prometheus.NewRegistry()
 
-    mm := New(pr, "namespace", "subsystem")
+    mm := mm.New(pr, "namespace", "subsystem")
 
     c := http.DefaultClient
     c.Transport = mm.DefaultMiddlewares(http.DefaultTransport)
