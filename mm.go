@@ -31,7 +31,7 @@ func New(metricsRegistry RegistrerGatherer, namespace, subsystem string) *MM {
 	}
 }
 
-func (mm *MM) WithClientRequestsInFlight(next http.RoundTripper) http.RoundTripper {
+func (mm *MM) AddClientRequestsInFlight(next http.RoundTripper) http.RoundTripper {
 	metric := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: mm.Namespace,
 		Subsystem: mm.Subsystem,
@@ -44,7 +44,7 @@ func (mm *MM) WithClientRequestsInFlight(next http.RoundTripper) http.RoundTripp
 	return promhttp.InstrumentRoundTripperInFlight(metric, next)
 }
 
-func (mm *MM) WithClientRequestsCounter(next http.RoundTripper) http.RoundTripper {
+func (mm *MM) AddClientRequestsCounter(next http.RoundTripper) http.RoundTripper {
 	metric := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: mm.Namespace,
@@ -60,7 +60,7 @@ func (mm *MM) WithClientRequestsCounter(next http.RoundTripper) http.RoundTrippe
 	return promhttp.InstrumentRoundTripperCounter(metric, next)
 }
 
-func (mm *MM) WithClientTrace(next http.RoundTripper) http.RoundTripper {
+func (mm *MM) AddClientTrace(next http.RoundTripper) http.RoundTripper {
 	clientDNSLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.Namespace,
@@ -103,7 +103,7 @@ func (mm *MM) WithClientTrace(next http.RoundTripper) http.RoundTripper {
 	return promhttp.InstrumentRoundTripperTrace(clientTrace, next)
 }
 
-func (mm *MM) WithClientDuration(next http.RoundTripper) http.RoundTripper {
+func (mm *MM) AddClientDuration(next http.RoundTripper) http.RoundTripper {
 	metric := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: mm.Namespace,
@@ -132,10 +132,10 @@ func Build(base http.RoundTripper, middlewares ...func(http.RoundTripper) http.R
 func (mm *MM) DefaultMiddlewares(baseTransport http.RoundTripper) http.RoundTripper {
 	finalMiddleware := Build(
 		baseTransport,
-		mm.WithClientRequestsInFlight,
-		mm.WithClientRequestsCounter,
-		mm.WithClientTrace,
-		mm.WithClientDuration,
+		mm.AddClientRequestsInFlight,
+		mm.AddClientRequestsCounter,
+		mm.AddClientTrace,
+		mm.AddClientDuration,
 	)
 	return finalMiddleware
 }
